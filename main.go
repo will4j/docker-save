@@ -4,18 +4,18 @@ Copyright © William Wang <williamw0825@gmail.com>
 package main
 
 import (
-	"docker-thin/command/commands"
-	"docker-thin/docker"
+	"docker-save/command/commands"
+	"docker-save/docker"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
 )
 
-func newDockerThinCommand(dockerCli *docker.DockerCli) *cobra.Command {
+func newDockerSaveCommand(dockerCli *docker.DockerCli) *cobra.Command {
 
 	cmd := &cobra.Command{
-		Use:                   "docker-thin [OPTIONS] COMMAND [ARG...]",
+		Use:                   "docker-save [OPTIONS] COMMAND [ARG...]",
 		Short:                 "A self-sufficient runtime for containers",
 		SilenceUsage:          true,
 		SilenceErrors:         true,
@@ -36,8 +36,8 @@ func newDockerThinCommand(dockerCli *docker.DockerCli) *cobra.Command {
 	return cmd
 }
 
-func runDockerThin(dockerCli *docker.DockerCli) error {
-	cmd := newDockerThinCommand(dockerCli)
+func runDockerSave(dockerCli *docker.DockerCli) error {
+	cmd := newDockerSaveCommand(dockerCli)
 
 	return cmd.Execute()
 }
@@ -46,7 +46,7 @@ func main() {
 	dockerCli := docker.NewDockerCli()
 	logrus.SetOutput(dockerCli.Err())
 
-	if err := runDockerThin(dockerCli); err != nil {
+	if err := runDockerSave(dockerCli); err != nil {
 		if sterr, ok := err.(docker.StatusError); ok {
 			if sterr.Status != "" {
 				fmt.Fprintln(dockerCli.Err(), sterr.Status)

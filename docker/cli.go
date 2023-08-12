@@ -1,7 +1,7 @@
 package docker
 
 import (
-	"docker-thin/docker/client"
+	"docker-save/docker/client"
 	"fmt"
 	"github.com/docker/cli/cli/streams"
 	"github.com/moby/term"

@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"docker-thin/command/image"
-	"docker-thin/docker"
+	"docker-save/command/image"
+	"docker-save/docker"
 	"github.com/spf13/cobra"
 )
 

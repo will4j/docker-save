@@ -4,7 +4,7 @@ Copyright © 2023 William Wang <williamw0825@gmail.com>
 package image
 
 import (
-	"docker-thin/docker"
+	"docker-save/docker"
 	"io"
 
 	"github.com/docker/cli/cli/command"
