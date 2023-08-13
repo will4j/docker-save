@@ -15,8 +15,8 @@ import (
 func newDockerSaveCommand(dockerCli *docker.DockerCli) *cobra.Command {
 
 	cmd := &cobra.Command{
-		Use:                   "docker-save [OPTIONS] COMMAND [ARG...]",
-		Short:                 "A self-sufficient runtime for containers",
+		Use:                   "docker-save COMMAND [ARG...]",
+		Short:                 "A tool for saving docker images to a tar archive, support for filtering image layers",
 		SilenceUsage:          true,
 		SilenceErrors:         true,
 		TraverseChildren:      true,
