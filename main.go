@@ -47,17 +47,6 @@ func main() {
 	logrus.SetOutput(dockerCli.Err())
 
 	if err := runDockerSave(dockerCli); err != nil {
-		if sterr, ok := err.(docker.StatusError); ok {
-			if sterr.Status != "" {
-				fmt.Fprintln(dockerCli.Err(), sterr.Status)
-			}
-			// StatusError should only be used for errors, and all errors should
-			// have a non-zero exit status, so never exit with 0
-			if sterr.StatusCode == 0 {
-				os.Exit(1)
-			}
-			os.Exit(sterr.StatusCode)
-		}
 		fmt.Fprintln(dockerCli.Err(), err)
 		os.Exit(1)
 	}
