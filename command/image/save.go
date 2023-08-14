@@ -11,6 +11,7 @@ import (
 	"github.com/moby/sys/symlink"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/context"
 	"io"
 	"os"
 	"path/filepath"
@@ -62,12 +63,13 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 	}
 
 	// check docker service & image first
-	_, err := dockerCli.Client().ImageInspect(opts.images)
+	ctx := context.Background()
+	err := imageInspectCheck(ctx, dockerCli, opts.images)
 	if err != nil {
 		return err
 	}
 
-	responseBody, err := dockerCli.Client().ImageSave(opts.images)
+	responseBody, err := dockerCli.Client().ImageSave(ctx, opts.images)
 	if err != nil {
 		return err
 	}
@@ -92,6 +94,20 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 	}
 
 	return command.CopyToFile(opts.output, outputBody)
+}
+
+func imageInspectCheck(ctx context.Context, dockerCli docker.Cli, images []string) error {
+	client := dockerCli.Client()
+	getRefFunc := func(ref string) (interface{}, []byte, error) {
+		return client.ImageInspectWithRaw(ctx, ref)
+	}
+	for _, image := range images {
+		_, _, err := getRefFunc(image)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func filterImageLayers(inTar io.ReadCloser, opts saveOptions) (io.ReadCloser, string, error) {
