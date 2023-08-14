@@ -134,7 +134,7 @@ func safePath(base, path string) (string, error) {
 }
 
 func needToFilterImageLayers(opts saveOptions) bool {
-	if opts.last > 1 {
+	if opts.last > 0 {
 		return true
 	}
 	if opts.latest {
@@ -147,7 +147,7 @@ func layersToExclude(layers []string, opts saveOptions) []string {
 	end := len(layers)
 	if opts.latest {
 		end = end - 1
-	} else if opts.last > 1 {
+	} else if opts.last > 0 {
 		end = end - opts.last
 	}
 	if end < 1 {
