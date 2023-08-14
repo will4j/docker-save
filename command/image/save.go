@@ -73,28 +73,28 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 	}
 	defer responseBody.Close()
 
-	output, workDir, err := filterImageLayers(responseBody, opts)
-	if !opts.keep && workDir != "" {
-		defer os.RemoveAll(workDir)
+	outputBody := responseBody
+	if needToFilterImageLayers(opts) {
+		outputTar, workDir, err := filterImageLayers(responseBody, opts)
+		if !opts.keep && workDir != "" {
+			defer os.RemoveAll(workDir)
+		}
+		if err != nil {
+			return err
+		}
+		defer outputTar.Close()
+		outputBody = outputTar
 	}
-	if err != nil {
-		return err
-	}
-	defer output.Close()
 
 	if opts.output == "" {
-		_, err := io.Copy(dockerCli.Out(), output)
+		_, err := io.Copy(dockerCli.Out(), outputBody)
 		return err
 	}
 
-	return command.CopyToFile(opts.output, output)
+	return command.CopyToFile(opts.output, outputBody)
 }
 
 func filterImageLayers(inTar io.ReadCloser, opts saveOptions) (io.ReadCloser, string, error) {
-	if noNeedToFilterImageLayers(opts) {
-		return inTar, "", nil
-	}
-
 	workDir, err := os.MkdirTemp(opts.workdir, "docker-save-")
 	if err != nil {
 		return nil, workDir, err
@@ -133,14 +133,14 @@ func safePath(base, path string) (string, error) {
 	return symlink.FollowSymlinkInScope(filepath.Join(base, path), base)
 }
 
-func noNeedToFilterImageLayers(opts saveOptions) bool {
+func needToFilterImageLayers(opts saveOptions) bool {
 	if opts.last > 1 {
-		return false
+		return true
 	}
 	if opts.latest {
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 func layersToExclude(layers []string, opts saveOptions) []string {
