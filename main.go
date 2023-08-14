@@ -5,6 +5,7 @@ package main
 
 import (
 	"docker-save/command/commands"
+	"docker-save/command/image"
 	"docker-save/docker"
 	"fmt"
 	"github.com/sirupsen/logrus"
@@ -14,32 +15,24 @@ import (
 
 func newDockerSaveCommand(dockerCli *docker.DockerCli) *cobra.Command {
 
-	cmd := &cobra.Command{
-		Use:                   "docker-save COMMAND [ARG...]",
-		Short:                 "A tool for saving docker images to a tar archive, support for filtering image layers",
-		SilenceUsage:          true,
-		SilenceErrors:         true,
-		TraverseChildren:      true,
-		DisableFlagsInUseLine: true,
-		CompletionOptions: cobra.CompletionOptions{
-			DisableDefaultCmd:   false,
-			HiddenDefaultCmd:    true,
-			DisableDescriptions: true,
-		},
-	}
-	cmd.SetIn(dockerCli.In())
-	cmd.SetOut(dockerCli.Out())
-	cmd.SetErr(dockerCli.Err())
+	rootCmd := image.NewSaveCommand(dockerCli)
 
-	commands.AddCommands(cmd, dockerCli)
+	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
+	rootCmd.TraverseChildren = true
 
-	return cmd
+	rootCmd.SetIn(dockerCli.In())
+	rootCmd.SetOut(dockerCli.Out())
+	rootCmd.SetErr(dockerCli.Err())
+
+	commands.AddCommands(rootCmd, dockerCli)
+
+	return rootCmd
 }
 
 func runDockerSave(dockerCli *docker.DockerCli) error {
-	cmd := newDockerSaveCommand(dockerCli)
-
-	return cmd.Execute()
+	rootCmd := newDockerSaveCommand(dockerCli)
+	return rootCmd.Execute()
 }
 
 func main() {
