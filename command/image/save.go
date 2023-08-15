@@ -17,12 +17,13 @@ import (
 )
 
 type saveOptions struct {
-	images  []string
-	output  string
-	workdir string
-	keep    bool
-	last    int
-	latest  bool
+	images    []string
+	output    string
+	workdir   string
+	keep      bool
+	last      int
+	latest    bool
+	cacheFrom string
 }
 
 // NewSaveCommand creates a new `docker save` command
@@ -47,6 +48,7 @@ add support for filtering image layers`,
 	flags.IntVarP(&opts.last, "last", "l", 0, "Export the last n image layers for each image")
 	flags.BoolVarP(&opts.latest, "latest", "L", false, "Only export the latest image layer for each image")
 	flags.BoolVarP(&opts.keep, "keep", "k", false, "Keep workdir afterwards, default to auto clean")
+	flags.StringVarP(&opts.cacheFrom, "cache-from", "c", "", "Use image tar directory already exists other than export from docker")
 
 	return cmd
 }
@@ -73,19 +75,16 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 }
 
 func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
-	workDir, err := os.MkdirTemp(opts.workdir, "docker-save-")
+	untarDir, err := exportAndUntarImages(dockerCli, opts)
+	if shouldCleanUntarDir(opts) && untarDir != "" {
+		// must not be run before func outputSave
+		defer os.RemoveAll(untarDir)
+	}
 	if err != nil {
 		return err
 	}
-	if !opts.keep && workDir != "" {
-		defer os.RemoveAll(workDir)
-	}
 
-	if err := ExportUntarImages(dockerCli, opts.images, workDir); err != nil {
-		return err
-	}
-
-	manifestPath, err := safePath(workDir, manifestFileName)
+	manifestPath, err := safePath(untarDir, manifestFileName)
 	if err != nil {
 		return err
 	}
@@ -106,12 +105,46 @@ func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
 		Compression:     archive.Uncompressed,
 		ExcludePatterns: excludedLayers,
 	}
-	tar, err := archive.TarWithOptions(workDir, tarOptions)
+	tar, err := archive.TarWithOptions(untarDir, tarOptions)
 	if err != nil {
 		return err
 	}
 
 	return outputSave(dockerCli, opts.output, tar)
+}
+
+func exportAndUntarImages(dockerCli docker.Cli, opts saveOptions) (string, error) {
+	if opts.cacheFrom != "" {
+		// use cached untar dir
+		return opts.cacheFrom, nil
+	}
+
+	untarDir, err := os.MkdirTemp(opts.workdir, tempDirPatter(opts))
+	if err != nil {
+		return "", err
+	}
+
+	if err := ExportUntarImages(dockerCli, opts.images, untarDir); err != nil {
+		return untarDir, err
+	}
+	return untarDir, nil
+}
+
+func shouldCleanUntarDir(opts saveOptions) bool {
+	if opts.keep {
+		return false
+	}
+	if opts.cacheFrom != "" {
+		return false
+	}
+	return true
+}
+
+func tempDirPatter(opts saveOptions) string {
+	if opts.output != "" {
+		return opts.output + "-"
+	}
+	return "docker-save-"
 }
 
 func outputSave(dockerCli docker.Cli, output string, body io.ReadCloser) error {
