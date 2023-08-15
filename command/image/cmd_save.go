@@ -5,25 +5,19 @@ package image
 
 import (
 	"docker-save/docker"
-	"encoding/json"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/moby/sys/symlink"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"io"
 	"os"
-	"path/filepath"
 )
 
 type saveOptions struct {
-	images    []string
-	output    string
-	workdir   string
-	keep      bool
-	last      int
-	latest    bool
-	cacheFrom string
+	commonImageOptions
+	output string
+	last   int
+	latest bool
 }
 
 // NewSaveCommand creates a new `docker save` command
@@ -48,7 +42,7 @@ add support for filtering image layers`,
 	flags.IntVarP(&opts.last, "last", "l", 0, "Export the last n image layers for each image")
 	flags.BoolVarP(&opts.latest, "latest", "L", false, "Only export the latest image layer for each image")
 	flags.BoolVarP(&opts.keep, "keep", "k", false, "Keep workdir afterwards, default to auto clean")
-	flags.StringVarP(&opts.cacheFrom, "cache-from", "c", "", "Use image tar directory already exists other than export from docker")
+	flags.StringVarP(&opts.cacheFrom, "cache-from", "c", "", "Use untar-images directory already exists other than export from docker")
 
 	return cmd
 }
@@ -74,9 +68,26 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 	}
 }
 
+func needToFilterImageLayers(opts saveOptions) bool {
+	if opts.last > 0 {
+		return true
+	}
+	if opts.latest {
+		return true
+	}
+	return false
+}
+
 func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
-	untarDir, err := exportAndUntarImages(dockerCli, opts)
-	if shouldCleanUntarDir(opts) && untarDir != "" {
+	tempDirPattern := func() string {
+		if opts.output != "" {
+			return opts.output + "-"
+		}
+		return "docker-save-"
+	}
+
+	untarDir, err := ExportUntarImages(dockerCli, opts.commonImageOptions, tempDirPattern)
+	if shouldCleanUntarDir(opts.commonImageOptions) && untarDir != "" {
 		// must not be run before func outputSave
 		defer os.RemoveAll(untarDir)
 	}
@@ -84,20 +95,13 @@ func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
 		return err
 	}
 
-	manifestPath, err := safePath(untarDir, manifestFileName)
+	manifests, err := ResolveManifests(untarDir)
 	if err != nil {
-		return err
-	}
-	manifestFile, err := os.Open(manifestPath)
-	defer manifestFile.Close()
-
-	var manifest []manifestItem
-	if err := json.NewDecoder(manifestFile).Decode(&manifest); err != nil {
 		return err
 	}
 
 	excludedLayers := []string{}
-	for _, m := range manifest {
+	for _, m := range manifests {
 		layers := m.Layers
 		excludedLayers = append(excludedLayers, layersToExclude(layers, opts)...)
 	}
@@ -113,40 +117,6 @@ func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
 	return outputSave(dockerCli, opts.output, tar)
 }
 
-func exportAndUntarImages(dockerCli docker.Cli, opts saveOptions) (string, error) {
-	if opts.cacheFrom != "" {
-		// use cached untar dir
-		return opts.cacheFrom, nil
-	}
-
-	untarDir, err := os.MkdirTemp(opts.workdir, tempDirPatter(opts))
-	if err != nil {
-		return "", err
-	}
-
-	if err := ExportUntarImages(dockerCli, opts.images, untarDir); err != nil {
-		return untarDir, err
-	}
-	return untarDir, nil
-}
-
-func shouldCleanUntarDir(opts saveOptions) bool {
-	if opts.keep {
-		return false
-	}
-	if opts.cacheFrom != "" {
-		return false
-	}
-	return true
-}
-
-func tempDirPatter(opts saveOptions) string {
-	if opts.output != "" {
-		return opts.output + "-"
-	}
-	return "docker-save-"
-}
-
 func outputSave(dockerCli docker.Cli, output string, body io.ReadCloser) error {
 	defer body.Close()
 	if output == "" {
@@ -155,20 +125,6 @@ func outputSave(dockerCli docker.Cli, output string, body io.ReadCloser) error {
 	}
 
 	return command.CopyToFile(output, body)
-}
-
-func safePath(base, path string) (string, error) {
-	return symlink.FollowSymlinkInScope(filepath.Join(base, path), base)
-}
-
-func needToFilterImageLayers(opts saveOptions) bool {
-	if opts.last > 0 {
-		return true
-	}
-	if opts.latest {
-		return true
-	}
-	return false
 }
 
 func layersToExclude(layers []string, opts saveOptions) []string {
