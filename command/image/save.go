@@ -11,7 +11,6 @@ import (
 	"github.com/moby/sys/symlink"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 	"io"
 	"os"
 	"path/filepath"
@@ -62,73 +61,40 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 		return errors.Wrap(err, "failed to save image")
 	}
 
-	// check docker service & image first
-	ctx := context.Background()
-	err := imageInspectCheck(ctx, dockerCli, opts.images)
-	if err != nil {
-		return err
-	}
-
-	responseBody, err := dockerCli.Client().ImageSave(ctx, opts.images)
-	if err != nil {
-		return err
-	}
-	defer responseBody.Close()
-
-	outputBody := responseBody
 	if needToFilterImageLayers(opts) {
-		outputTar, workDir, err := filterImageLayers(responseBody, opts)
-		if !opts.keep && workDir != "" {
-			defer os.RemoveAll(workDir)
-		}
+		return exportImagesWithFilter(dockerCli, opts)
+	} else {
+		imagesTar, err := ExportImages(dockerCli, opts.images)
 		if err != nil {
 			return err
 		}
-		defer outputTar.Close()
-		outputBody = outputTar
+		return outputSave(dockerCli, opts.output, imagesTar)
 	}
-
-	if opts.output == "" {
-		_, err := io.Copy(dockerCli.Out(), outputBody)
-		return err
-	}
-
-	return command.CopyToFile(opts.output, outputBody)
 }
 
-func imageInspectCheck(ctx context.Context, dockerCli docker.Cli, images []string) error {
-	client := dockerCli.Client()
-	getRefFunc := func(ref string) (interface{}, []byte, error) {
-		return client.ImageInspectWithRaw(ctx, ref)
-	}
-	for _, image := range images {
-		_, _, err := getRefFunc(image)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func filterImageLayers(inTar io.ReadCloser, opts saveOptions) (io.ReadCloser, string, error) {
+func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
 	workDir, err := os.MkdirTemp(opts.workdir, "docker-save-")
 	if err != nil {
-		return nil, workDir, err
+		return err
+	}
+	if !opts.keep && workDir != "" {
+		defer os.RemoveAll(workDir)
 	}
 
-	if err := archive.Untar(inTar, workDir, &archive.TarOptions{NoLchown: true}); err != nil {
-		return nil, workDir, err
+	if err := ExportUntarImages(dockerCli, opts.images, workDir); err != nil {
+		return err
 	}
+
 	manifestPath, err := safePath(workDir, manifestFileName)
 	if err != nil {
-		return nil, workDir, err
+		return err
 	}
 	manifestFile, err := os.Open(manifestPath)
 	defer manifestFile.Close()
 
 	var manifest []manifestItem
 	if err := json.NewDecoder(manifestFile).Decode(&manifest); err != nil {
-		return nil, workDir, err
+		return err
 	}
 
 	excludedLayers := []string{}
@@ -141,8 +107,21 @@ func filterImageLayers(inTar io.ReadCloser, opts saveOptions) (io.ReadCloser, st
 		ExcludePatterns: excludedLayers,
 	}
 	tar, err := archive.TarWithOptions(workDir, tarOptions)
+	if err != nil {
+		return err
+	}
 
-	return tar, workDir, err
+	return outputSave(dockerCli, opts.output, tar)
+}
+
+func outputSave(dockerCli docker.Cli, output string, body io.ReadCloser) error {
+	defer body.Close()
+	if output == "" {
+		_, err := io.Copy(dockerCli.Out(), body)
+		return err
+	}
+
+	return command.CopyToFile(output, body)
 }
 
 func safePath(base, path string) (string, error) {
