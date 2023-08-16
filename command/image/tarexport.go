@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -117,4 +118,29 @@ func shouldCleanUntarDir(opts commonImageOptions) bool {
 		return false
 	}
 	return true
+}
+
+func OmitString(str string, maxLength int) string {
+	if len(str) <= maxLength {
+		return str
+	}
+	tail := maxLength / 3
+	head := maxLength - tail - 3
+	return str[:head] + "..." + str[len(str)-tail:]
+}
+
+func ImagesConcatFmt(images []string) string {
+	simplified := simplifyImageStr(images[0])
+	if len(images) > 1 {
+		simplified = simplified + "..."
+	}
+	return simplified
+}
+
+func simplifyImageStr(image string) string {
+	if strings.Contains(image, "/") {
+		tmp := strings.Split(image, "/")
+		image = tmp[len(tmp)-1]
+	}
+	return strings.ReplaceAll(image, ":", "_")
 }

@@ -46,7 +46,7 @@ func NewStatsCommand(dockerCli docker.Cli) *cobra.Command {
 // RunStats to stats image layers information
 func RunStats(dockerCli docker.Cli, opts statsOptions) error {
 	tempDirPattern := func() string {
-		return "docker-stats-"
+		return ImagesConcatFmt(opts.images) + "-"
 	}
 
 	untarDir, err := ExportUntarImages(dockerCli, opts.commonImageOptions, tempDirPattern)
@@ -98,6 +98,7 @@ func RunStats(dockerCli docker.Cli, opts statsOptions) error {
 		}
 		printManifestStatsTail(dockerCli, manifest)
 	}
+	fmt.Fprintln(dockerCli.Out(), "Done!")
 	return nil
 }
 
@@ -114,23 +115,17 @@ func (layer LayerStatsItem) Format() string {
 	return fmt.Sprintf("Layer %2d: Size %8s, %-64s DiffID: %s Layer: %s",
 		layer.Number,
 		units.HumanSizeWithPrecision(float64(layer.Size), 5),
-		ts(layer.Command, 64),
-		layer.DiffID,
+		omitCommand(layer.Command, 64),
+		OmitString(layer.DiffID.String(), 36),
 		layer.Layer)
 }
 
 var regex = regexp.MustCompile(`\s+`)
 
-// truncate string
-func ts(str string, length int) string {
+func omitCommand(str string, length int) string {
 	str = regex.ReplaceAllString(str, " ")
 	str = strings.TrimSuffix(str, " # buildkit")
-	if len(str) <= length {
-		return str
-	}
-	tail := length / 3
-	head := length - tail - 3
-	return str[:head] + "..." + str[len(str)-tail:]
+	return OmitString(str, length)
 }
 
 func filterNoEmptyHistory(history []image.History) []image.History {
@@ -154,5 +149,5 @@ func printManifestStatsHead(dockerCli docker.Cli, manifest manifestItem) {
 }
 
 func printManifestStatsTail(dockerCli docker.Cli, manifest manifestItem) {
-	fmt.Fprintln(dockerCli.Out(), "\nDone!")
+	fmt.Fprintln(dockerCli.Out(), "")
 }

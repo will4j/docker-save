@@ -83,7 +83,7 @@ func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
 		if opts.output != "" {
 			return opts.output + "-"
 		}
-		return "docker-save-"
+		return ImagesConcatFmt(opts.images) + "-"
 	}
 
 	untarDir, err := ExportUntarImages(dockerCli, opts.commonImageOptions, tempDirPattern)
