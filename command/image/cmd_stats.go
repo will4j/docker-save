@@ -96,6 +96,7 @@ func RunStats(dockerCli docker.Cli, opts statsOptions) error {
 			}
 			fmt.Fprintln(dockerCli.Out(), statsItem.Format())
 		}
+		printManifestStatsTail(dockerCli, manifest)
 	}
 	return nil
 }
@@ -149,5 +150,9 @@ func printManifestStatsHead(dockerCli docker.Cli, manifest manifestItem) {
 	} else {
 		identity = fmt.Sprintf("Image Id: %s", manifest.Config[:12])
 	}
-	fmt.Fprintf(dockerCli.Out(), "Start Stats of %s\n", identity)
+	fmt.Fprintf(dockerCli.Out(), "Start Stats of %s\n\n", identity)
+}
+
+func printManifestStatsTail(dockerCli docker.Cli, manifest manifestItem) {
+	fmt.Fprintln(dockerCli.Out(), "\nDone!")
 }
