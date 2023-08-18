@@ -10,5 +10,6 @@ import (
 func AddCommands(cmd *cobra.Command, dockerCli docker.Cli) {
 	cmd.AddCommand(
 		image.NewStatsCommand(dockerCli),
+		image.NewDiffCommand(dockerCli),
 	)
 }

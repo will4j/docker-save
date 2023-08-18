@@ -4,6 +4,7 @@ import (
 	"context"
 	"docker-save/docker"
 	"encoding/json"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/moby/sys/symlink"
 	"io"
@@ -36,12 +37,12 @@ type commonImageOptions struct {
 // ExportImages export images
 func ExportImages(dockerCli docker.Cli, images []string) (io.ReadCloser, error) {
 	// check docker service & image first
-	ctx := context.Background()
-	err := imageInspectCheck(ctx, dockerCli, images)
+	err := imageInspectCheck(dockerCli, images)
 	if err != nil {
 		return nil, err
 	}
 
+	ctx := context.Background()
 	return dockerCli.Client().ImageSave(ctx, images)
 }
 
@@ -92,18 +93,28 @@ func doExportAndUntar(dockerCli docker.Cli, images []string, unTarDir string) er
 	return nil
 }
 
-func imageInspectCheck(ctx context.Context, dockerCli docker.Cli, images []string) error {
-	client := dockerCli.Client()
-	getRefFunc := func(ref string) (interface{}, []byte, error) {
-		return client.ImageInspectWithRaw(ctx, ref)
-	}
-	for _, image := range images {
-		_, _, err := getRefFunc(image)
-		if err != nil {
-			return err
-		}
+func imageInspectCheck(dockerCli docker.Cli, images []string) error {
+	_, err := ImageInspect(dockerCli, images)
+	if err != nil {
+		return err
 	}
 	return nil
+}
+
+func ImageInspect(dockerCli docker.Cli, images []string) ([]types.ImageInspect, error) {
+	ctx := context.Background()
+	getRefFunc := func(ref string) (types.ImageInspect, []byte, error) {
+		return dockerCli.Client().ImageInspectWithRaw(ctx, ref)
+	}
+	resultArr := []types.ImageInspect{}
+	for _, image := range images {
+		inspect, _, err := getRefFunc(image)
+		if err != nil {
+			return nil, err
+		}
+		resultArr = append(resultArr, inspect)
+	}
+	return resultArr, nil
 }
 
 func safePath(base, path string) (string, error) {
