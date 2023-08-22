@@ -9,15 +9,17 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"golang.org/x/exp/slices"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 )
 
 type saveOptions struct {
 	commonImageOptions
 	output string
-	last   int
-	latest bool
+	last   string
 }
 
 // NewSaveCommand creates a new `docker save` command
@@ -39,8 +41,7 @@ add support for filtering image layers`,
 
 	flags.StringVarP(&opts.output, "output", "o", "", "Write to a file, instead of STDOUT")
 	flags.StringVarP(&opts.workdir, "workdir", "w", ".", "Directory for store tar files, default to current dir")
-	flags.IntVarP(&opts.last, "last", "l", 0, "Export the last n image layers for each image")
-	flags.BoolVarP(&opts.latest, "latest", "L", false, "Only export the latest image layer for each image")
+	flags.StringVarP(&opts.last, "last", "l", "", "Export the last n image layers, one number for all images, or comma separated numbers for each image")
 	flags.BoolVarP(&opts.keep, "keep", "k", false, "Keep workdir afterwards, default to auto clean")
 	flags.StringVarP(&opts.cacheFrom, "cache-from", "c", "", "Use untar-images directory already exists other than export from docker")
 
@@ -69,10 +70,7 @@ func RunSave(dockerCli docker.Cli, opts saveOptions) error {
 }
 
 func needToFilterImageLayers(opts saveOptions) bool {
-	if opts.last > 0 {
-		return true
-	}
-	if opts.latest {
+	if opts.last != "" {
 		return true
 	}
 	return false
@@ -102,8 +100,7 @@ func exportImagesWithFilter(dockerCli docker.Cli, opts saveOptions) error {
 
 	excludedLayers := []string{}
 	for _, m := range manifests {
-		layers := m.Layers
-		excludedLayers = append(excludedLayers, layersToExclude(layers, opts)...)
+		excludedLayers = append(excludedLayers, layersToExclude(m, opts)...)
 	}
 	tarOptions := &archive.TarOptions{
 		Compression:     archive.Uncompressed,
@@ -127,15 +124,41 @@ func outputSave(dockerCli docker.Cli, output string, body io.ReadCloser) error {
 	return command.CopyToFile(output, body)
 }
 
-func layersToExclude(layers []string, opts saveOptions) []string {
+func layersToExclude(m manifestItem, opts saveOptions) []string {
+	layers := m.Layers
 	end := len(layers)
-	if opts.latest {
-		end = end - 1
-	} else if opts.last > 0 {
-		end = end - opts.last
+	if opts.last != "" {
+		imageIndex := findInputImageIndex(m, opts)
+		lastValue, _ := findLastValue(imageIndex, opts)
+		end = end - lastValue
 	}
 	if end < 1 {
 		return []string{}
 	}
 	return layers[:end]
+}
+
+func findInputImageIndex(m manifestItem, opts saveOptions) int {
+	imageIndex := -1
+	for i, image := range opts.images {
+		if slices.Contains(m.RepoTags, image) || strings.HasPrefix(m.Config, image) {
+			imageIndex = i
+			break
+		}
+	}
+	return imageIndex
+}
+
+func findLastValue(imageIndex int, opts saveOptions) (int, error) {
+	lastArr := strings.Split(opts.last, ",")
+	if imageIndex < 0 {
+		return 0, nil
+	}
+	lastStr := "0"
+	if imageIndex >= len(lastArr) {
+		lastStr = lastArr[len(lastArr)-1]
+	} else {
+		lastStr = lastArr[imageIndex]
+	}
+	return strconv.Atoi(lastStr)
 }

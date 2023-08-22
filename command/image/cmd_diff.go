@@ -77,5 +77,5 @@ func printDiffLayer(dockerCli docker.Cli, layer0 string, layer1 string) bool {
 }
 
 func printDiffCount(dockerCli docker.Cli, diffCount int) {
-	fmt.Fprintln(dockerCli.Out(), "\nNumber of Different Layers: ", diffCount)
+	fmt.Fprintln(dockerCli.Out(), "\nNumber of Different Layers:", diffCount)
 }
