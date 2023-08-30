@@ -43,6 +43,8 @@ func RunDiff(dockerCli docker.Cli, opts diffOptions) error {
 	}
 	printDiffHead(dockerCli, inspects[0], inspects[1])
 	diffCount := 0
+	paramDiffCount := 0
+	startDiff := false
 	for i := 0; i < loop; i++ {
 		layer0 := ""
 		if i < size0 {
@@ -54,9 +56,13 @@ func RunDiff(dockerCli docker.Cli, opts diffOptions) error {
 		}
 		if printDiffLayer(dockerCli, layer0, layer1) {
 			diffCount += 1
+			startDiff = true
+		}
+		if startDiff {
+			paramDiffCount += 1
 		}
 	}
-	printDiffCount(dockerCli, diffCount)
+	printDiffCount(dockerCli, diffCount, paramDiffCount)
 	return nil
 }
 
@@ -76,6 +82,7 @@ func printDiffLayer(dockerCli docker.Cli, layer0 string, layer1 string) bool {
 	}
 }
 
-func printDiffCount(dockerCli docker.Cli, diffCount int) {
+func printDiffCount(dockerCli docker.Cli, diffCount int, paramDiffCount int) {
 	fmt.Fprintln(dockerCli.Out(), "\nNumber of Different Layers:", diffCount)
+	fmt.Fprintln(dockerCli.Out(), "\nParam of Export Different Layers:", paramDiffCount)
 }
